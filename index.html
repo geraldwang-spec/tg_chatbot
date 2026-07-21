@@ -335,6 +335,53 @@ window.sendMessage = async () => {
   input.value = '';
   input.style.height = 'auto';
 
+  // ── 斜線指令攔截 ──
+  if (text.startsWith('/train')) {
+    // /train 出發站 到達站 [日期]
+    // 例：/train 台北 台中  或  /train 台北 台中 2026-07-22
+    const parts = text.split(/\s+/);
+    const from = parts[1] || '';
+    const to   = parts[2] || '';
+    const date = parts[3] || '';
+    if (!from || !to) {
+      showError('用法：/train 出發站 到達站 [日期(選填)]<br>例：/train 台北 台中');
+      return;
+    }
+    if (from) document.getElementById('trainFrom').value = from;
+    if (to)   document.getElementById('trainTo').value   = to;
+    if (date) document.getElementById('trainDate').value = date;
+    appendMessage('user', text);
+    await window.queryTrain();
+    return;
+  }
+
+  if (text.startsWith('/web ')) {
+    const url = text.slice(5).trim();
+    document.getElementById('urlInput').value = url;
+    appendMessage('user', text);
+    await window.loadURL();
+    return;
+  }
+
+  if (text.startsWith('/search ')) {
+    const q = text.slice(8).trim();
+    document.getElementById('searchInput').value = q;
+    await window.doSearch();
+    return;
+  }
+
+  if (text === '/help') {
+    appendMessage('assistant',
+      `**可用指令：**\n` +
+      `\`/train 出發站 到達站 [日期]\` — 查台鐵時刻表\n` +
+      `\`/web 網址\` — 讀取網頁內容\n` +
+      `\`/search 關鍵字\` — DuckDuckGo 搜尋\n` +
+      `\`/help\` — 顯示此說明`
+    );
+    return;
+  }
+
+  // ── 一般對話 ──
   appendMessage('user', text);
   state.messages.push({ role: 'user', content: text });
   addTypingIndicator();
