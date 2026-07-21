@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 聊天助理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; }
+    #chat-messages { scroll-behavior: smooth; }
+    .user-bubble { background: #2563eb; color: white; border-radius: 18px 18px 4px 18px; }
+    .ai-bubble   { background: #f1f5f9; color: #1e293b; border-radius: 18px 18px 18px 4px; }
+    .ai-bubble h1,.ai-bubble h2,.ai-bubble h3 { font-weight:700; margin:0.5em 0 0.25em; }
+    .ai-bubble ul,.ai-bubble ol { padding-left:1.25em; margin:0.25em 0; }
+    .ai-bubble li { margin:0.1em 0; }
+    .ai-bubble p  { margin:0.3em 0; }
+    .ai-bubble code { background:#e2e8f0; padding:1px 5px; border-radius:4px; font-size:.85em; }
+    .ai-bubble pre { background:#1e293b; color:#e2e8f0; padding:10px; border-radius:8px; overflow-x:auto; margin:0.5em 0; }
+    .ai-bubble pre code { background:none; padding:0; }
+    .ai-bubble a { color:#2563eb; text-decoration:underline; }
+    .tab-btn.active { background:#2563eb; color:white; }
+    #sidebar { transition: transform 0.2s; }
+    @media(max-width:768px){
+      #sidebar { position:fixed; z-index:50; top:0; left:0; height:100%; transform:translateX(-100%); }
+      #sidebar.open { transform:translateX(0); }
+    }
+    .typing-dot { animation: blink 1s infinite; }
+    .typing-dot:nth-child(2) { animation-delay:0.2s; }
+    .typing-dot:nth-child(3) { animation-delay:0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex overflow-hidden">
+
+<!-- 側邊欄遮罩 (手機) -->
+<div id="overlay" class="hidden fixed inset-0 bg-black/40 z-40 md:hidden" onclick="toggleSidebar()"></div>
+
+<!-- 側邊欄 -->
+<aside id="sidebar" class="w-72 bg-white shadow-lg flex flex-col h-full overflow-y-auto flex-shrink-0">
+  <div class="p-4 bg-blue-600 text-white">
+    <h1 class="text-lg font-bold">⚙️ 設定</h1>
+  </div>
+
+  <div class="p-4 space-y-5 flex-1">
+
+    <!-- API 金鑰 -->
+    <section>
+      <h2 class="font-semibold text-gray-700 mb-2">🔑 OpenRouter API Key</h2>
+      <input id="apiKey" type="password" placeholder="sk-or-v1-..."
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <p class="text-xs text-gray-400 mt-1">
+        <a href="https://openrouter.ai/keys" target="_blank" class="underline text-blue-500">openrouter.ai/keys</a>
+        免費取得
+      </p>
+    </section>
+
+    <!-- 模型選擇 -->
+    <section>
+      <h2 class="font-semibold text-gray-700 mb-2">🤖 AI 模型</h2>
+      <select id="modelSelect" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <option value="openai/gpt-4o-mini">GPT-4o Mini（快速/省費）</option>
+        <option value="openai/gpt-4o">GPT-4o</option>
+        <option value="openai/o1-mini">o1-mini</option>
+        <option value="anthropic/claude-3-5-haiku">Claude 3.5 Haiku</option>
+        <option value="anthropic/claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+        <option value="google/gemini-flash-1.5">Gemini Flash 1.5</option>
+        <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+        <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B（免費）</option>
+        <option value="mistralai/mistral-7b-instruct:free">Mistral 7B（免費）</option>
+      </select>
+    </section>
+
+    <!-- 角色設定 -->
+    <section>
+      <h2 class="font-semibold text-gray-700 mb-2">🎭 AI 角色（System Prompt）</h2>
+      <textarea id="systemPrompt" rows="4"
+        class="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="你是一個樂於助人的 AI 助理。">你是一個樂於助人的 AI 助理。</textarea>
+      <div class="flex gap-2 mt-2">
+        <button onclick="applyRole()" class="flex-1 bg-blue-600 text-white text-sm py-1.5 rounded-lg hover:bg-blue-700">套用</button>
+        <button onclick="resetRole()" class="flex-1 bg-gray-200 text-gray-700 text-sm py-1.5 rounded-lg hover:bg-gray-300">重置</button>
+      </div>
+    </section>
+
+    <!-- PDF 上傳 -->
+    <section>
+      <h2 class="font-semibold text-gray-700 mb-2">📄 PDF 上傳</h2>
+      <label class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-3 cursor-pointer hover:border-blue-400 text-sm text-gray-500">
+        <span id="pdfLabel">點擊或拖曳 PDF 到這裡</span>
+        <input id="pdfInput" type="file" accept=".pdf" class="hidden" onchange="loadPDF(this)" />
+      </label>
+      <div id="pdfStatus" class="hidden mt-2 text-xs bg-blue-50 border border-blue-200 rounded p-2 flex justify-between items-center">
+        <span id="pdfName" class="text-blue-700 truncate mr-2"></span>
+        <button onclick="clearPDF()" class="text-red-500 hover:text-red-700 flex-shrink-0">✕ 清除</button>
+      </div>
+    </section>
+
+    <!-- 台鐵 -->
+    <section>
+      <h2 class="font-semibold text-gray-700 mb-2">🚆 台鐵時刻表 (TDX)</h2>
+      <input id="tdxId" type="password" placeholder="TDX Client ID"
+        class="w-full border rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <input id="tdxSecret" type="password" placeholder="TDX Client Secret"
+        class="w-full border rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <div class="flex gap-2 mb-2">
+        <input id="trainFrom" type="text" placeholder="出發站（台北）"
+          class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+        <input id="trainTo" type="text" placeholder="到達站（台中）"
+          class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      </div>
+      <input id="trainDate" type="date"
+        class="w-full border rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <button onclick="queryTrain()" class="w-full bg-green-600 text-white text-sm py-1.5 rounded-lg hover:bg-green-700">
+        查詢時刻表
+      </button>
+    </section>
+
+    <!-- 清除對話 -->
+    <section>
+      <button onclick="clearChat()" class="w-full bg-red-50 text-red-600 border border-red-200 text-sm py-2 rounded-lg hover:bg-red-100">
+        🗑️ 清除所有對話
+      </button>
+    </section>
+
+  </div>
+</aside>
+
+<!-- 主區域 -->
+<main class="flex-1 flex flex-col h-full overflow-hidden">
+
+  <!-- 頂部列 -->
+  <header class="bg-white shadow-sm px-4 py-3 flex items-center gap-3 flex-shrink-0">
+    <button class="md:hidden text-gray-600 text-xl" onclick="toggleSidebar()">☰</button>
+    <div>
+      <h1 class="font-bold text-gray-800 text-base leading-tight">🤖 AI 聊天助理</h1>
+      <p class="text-xs text-gray-400">OpenRouter · PDF 讀取 · DuckDuckGo 搜尋 · 台鐵時刻表</p>
+    </div>
+    <div id="statusBadges" class="ml-auto flex gap-2 flex-wrap justify-end"></div>
+  </header>
+
+  <!-- 對話區 -->
+  <div id="chat-messages" class="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+    <div class="text-center text-gray-400 text-sm py-8" id="emptyHint">
+      在左側輸入 <strong>OpenRouter API Key</strong>，然後開始聊天 👇
+    </div>
+  </div>
+
+  <!-- 工具列（搜尋 + 網頁讀取） -->
+  <div class="bg-white border-t px-4 py-2 flex gap-2">
+    <div class="flex-1 flex gap-2 items-center">
+      <input id="searchInput" type="text" placeholder="🔍 DuckDuckGo 搜尋 + AI 分析"
+        class="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        onkeydown="if(event.key==='Enter') doSearch()" />
+      <button onclick="doSearch()"
+        class="bg-blue-100 text-blue-700 text-sm px-3 py-1.5 rounded-lg hover:bg-blue-200 whitespace-nowrap">搜尋</button>
+    </div>
+    <div class="flex-1 flex gap-2 items-center">
+      <input id="urlInput" type="text" placeholder="🌐 貼上網址 + AI 分析"
+        class="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        onkeydown="if(event.key==='Enter') loadURL()" />
+      <button onclick="loadURL()"
+        class="bg-green-100 text-green-700 text-sm px-3 py-1.5 rounded-lg hover:bg-green-200 whitespace-nowrap">讀取</button>
+    </div>
+  </div>
+
+  <!-- 輸入列 -->
+  <div class="bg-white border-t px-4 py-3 flex gap-3 items-end flex-shrink-0">
+    <textarea id="userInput" rows="1"
+      class="flex-1 border rounded-2xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 max-h-32"
+      placeholder="輸入訊息，Enter 送出（Shift+Enter 換行）"
+      onkeydown="handleEnter(event)"
+      oninput="autoResize(this)"></textarea>
+    <button onclick="sendMessage()"
+      class="bg-blue-600 text-white rounded-2xl px-5 py-2.5 text-sm font-medium hover:bg-blue-700 flex-shrink-0">
+      送出
+    </button>
+  </div>
+</main>
+
+<script type="module">
+// ─────────────────────────────────────────────
+// 狀態
+// ─────────────────────────────────────────────
+const state = {
+  messages: [],       // [{role, content}]
+  pdfText: null,
+  pdfName: null,
+  webText: null,
+  webUrl:  null,
+};
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const MAX_PDF_CHARS  = 15000;
+const MAX_WEB_CHARS  = 8000;
+const MAX_HISTORY    = 20;
+
+const TDX_AUTH_URL = 'https://tdx.transportdata.tw/auth/realms/TDXConnect/protocol/openid-connect/token';
+const TDX_TRA_BASE = 'https://tdx.transportdata.tw/api/basic/v3/Rail/TRA';
+const TRAIN_TYPES  = {
+  '1':'太魯閣','2':'普悠瑪','3':'自強(3000)','4':'自強(2000)',
+  '5':'莒光','6':'復興','7':'區間','8':'普快','10':'區間快',
+  '11':'新自強(3000)','1131':'普快(專用)',
+};
+
+let tdxToken = null, tdxTokenExpires = 0;
+let traStations = null, traStationsExpires = 0;
+
+// ─────────────────────────────────────────────
+// UI 工具
+// ─────────────────────────────────────────────
+window.toggleSidebar = () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('hidden');
+};
+
+window.autoResize = (el) => {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+};
+
+window.handleEnter = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+};
+
+function getApiKey() { return document.getElementById('apiKey').value.trim(); }
+function getModel()  { return document.getElementById('modelSelect').value; }
+
+function buildSystemPrompt() {
+  const base = document.getElementById('systemPrompt').value.trim() || '你是一個樂於助人的 AI 助理。';
+  const parts = [base];
+  if (state.pdfText) {
+    const t = state.pdfText.slice(0, MAX_PDF_CHARS);
+    const note = state.pdfText.length > MAX_PDF_CHARS ? '\n（注意：PDF 內容過長，僅擷取前面部分）' : '';
+    parts.push(`以下是使用者上傳的 PDF 文件「${state.pdfName}」的內容，請根據這份文件的內容來回答使用者的問題。${note}\n----- PDF 內容開始 -----\n${t}\n----- PDF 內容結束 -----`);
+  }
+  if (state.webText) {
+    const t = state.webText.slice(0, MAX_WEB_CHARS);
+    const note = state.webText.length > MAX_WEB_CHARS ? '\n（注意：網頁內容過長，僅擷取前面部分）' : '';
+    parts.push(`以下是網址「${state.webUrl}」的頁面內容，請根據這份內容來回答使用者的問題。${note}\n----- 網頁內容開始 -----\n${t}\n----- 網頁內容結束 -----`);
+  }
+  return parts.join('\n\n');
+}
+
+function updateStatusBadges() {
+  const el = document.getElementById('statusBadges');
+  const badges = [];
+  if (state.pdfName) badges.push(`<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">📄 ${state.pdfName}</span>`);
+  if (state.webUrl)  badges.push(`<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">🌐 ${state.webUrl.slice(0,30)}...</span>`);
+  el.innerHTML = badges.join('');
+}
+
+function appendMessage(role, content) {
+  const el = document.getElementById('emptyHint');
+  if (el) el.remove();
+
+  const wrap = document.createElement('div');
+  wrap.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+  const bubble = document.createElement('div');
+  bubble.className = `max-w-[85%] px-4 py-2.5 text-sm leading-relaxed ${role === 'user' ? 'user-bubble' : 'ai-bubble'}`;
+
+  if (role === 'assistant') {
+    bubble.innerHTML = marked.parse(content);
+  } else {
+    bubble.textContent = content;
+  }
+
+  wrap.appendChild(bubble);
+  document.getElementById('chat-messages').appendChild(wrap);
+  document.getElementById('chat-messages').scrollTop = 9999;
+  return bubble;
+}
+
+function addTypingIndicator() {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex justify-start';
+  wrap.id = 'typing-indicator';
+  wrap.innerHTML = `<div class="ai-bubble px-4 py-3 flex gap-1 items-center">
+    <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full block"></span>
+    <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full block"></span>
+    <span class="typing-dot w-2 h-2 bg-gray-400 rounded-full block"></span>
+  </div>`;
+  document.getElementById('chat-messages').appendChild(wrap);
+  document.getElementById('chat-messages').scrollTop = 9999;
+}
+
+function removeTypingIndicator() {
+  document.getElementById('typing-indicator')?.remove();
+}
+
+function showError(msg) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex justify-center';
+  wrap.innerHTML = `<div class="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">${msg}</div>`;
+  document.getElementById('chat-messages').appendChild(wrap);
+  document.getElementById('chat-messages').scrollTop = 9999;
+}
+
+// ─────────────────────────────────────────────
+// OpenRouter API 呼叫
+// ─────────────────────────────────────────────
+async function callOpenRouter(userMessage) {
+  const apiKey = getApiKey();
+  if (!apiKey) { showError('請先在左側輸入 OpenRouter API Key'); return null; }
+
+  const history = [...state.messages, { role: 'user', content: userMessage }];
+  const messages = [{ role: 'system', content: buildSystemPrompt() }, ...history];
+
+  const resp = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': location.href,
+      'X-Title': 'AI Chat Assistant',
+    },
+    body: JSON.stringify({ model: getModel(), messages, max_tokens: 2000 }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: { message: resp.statusText } }));
+    throw new Error(`API 錯誤 ${resp.status}：${err?.error?.message || JSON.stringify(err)}`);
+  }
+
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+// ─────────────────────────────────────────────
+// 傳送訊息
+// ─────────────────────────────────────────────
+window.sendMessage = async () => {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  appendMessage('user', text);
+  state.messages.push({ role: 'user', content: text });
+  addTypingIndicator();
+
+  try {
+    const reply = await callOpenRouter(text);
+    removeTypingIndicator();
+    if (reply) {
+      appendMessage('assistant', reply);
+      state.messages.push({ role: 'assistant', content: reply });
+      if (state.messages.length > MAX_HISTORY) state.messages = state.messages.slice(-MAX_HISTORY);
+    }
+  } catch (e) {
+    removeTypingIndicator();
+    showError(e.message);
+  }
+};
+
+// ─────────────────────────────────────────────
+// 角色設定
+// ─────────────────────────────────────────────
+window.applyRole = () => {
+  state.messages = [];
+  document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 text-sm py-4">角色已套用，對話已清除。</div>';
+};
+
+window.resetRole = () => {
+  document.getElementById('systemPrompt').value = '你是一個樂於助人的 AI 助理。';
+  state.messages = [];
+  document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 text-sm py-4">角色已重置。</div>';
+};
+
+window.clearChat = () => {
+  state.messages = [];
+  document.getElementById('chat-messages').innerHTML = '<div class="text-center text-gray-400 text-sm py-8" id="emptyHint">在左側輸入 <strong>OpenRouter API Key</strong>，然後開始聊天 👇</div>';
+};
+
+// ─────────────────────────────────────────────
+// PDF 讀取（PDF.js）
+// ─────────────────────────────────────────────
+window.loadPDF = async (input) => {
+  const file = input.files[0];
+  if (!file) return;
+
+  const label = document.getElementById('pdfLabel');
+  label.textContent = '讀取中...';
+
+  try {
+    const { getDocument, GlobalWorkerOptions } = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
+    GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+
+    const buffer = await file.arrayBuffer();
+    const pdf = await getDocument({ data: buffer }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      fullText += tc.items.map(s => s.str).join(' ') + '\n';
+    }
+
+    state.pdfText = fullText.trim();
+    state.pdfName = file.name;
+    state.messages = [];
+
+    document.getElementById('pdfStatus').classList.remove('hidden');
+    document.getElementById('pdfName').textContent = `${file.name}（${fullText.length} 字）`;
+    label.textContent = '點擊或拖曳 PDF 到這裡';
+    updateStatusBadges();
+    showInfo(`✅ 已載入 PDF「${file.name}」（${fullText.length} 字）。現在可以針對文件提問！`);
+  } catch (e) {
+    label.textContent = '點擊或拖曳 PDF 到這裡';
+    showError(`❌ PDF 讀取失敗：${e.message}`);
+  }
+};
+
+window.clearPDF = () => {
+  state.pdfText = null;
+  state.pdfName = null;
+  state.messages = [];
+  document.getElementById('pdfStatus').classList.add('hidden');
+  document.getElementById('pdfInput').value = '';
+  updateStatusBadges();
+};
+
+function showInfo(msg) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex justify-center';
+  wrap.innerHTML = `<div class="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">${msg}</div>`;
+  document.getElementById('chat-messages').appendChild(wrap);
+  document.getElementById('chat-messages').scrollTop = 9999;
+}
+
+// ─────────────────────────────────────────────
+// 網頁讀取（via Jina Reader — 免費 CORS-friendly）
+// ─────────────────────────────────────────────
+window.loadURL = async () => {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { showError('請輸入網址'); return; }
+
+  showInfo('🌐 讀取網頁中...');
+  try {
+    // Jina Reader API 可免費把任意網頁轉成純文字，並且支援 CORS
+    const resp = await fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
+      headers: { 'Accept': 'text/plain' }
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = (await resp.text()).slice(0, MAX_WEB_CHARS);
+
+    state.webText = text;
+    state.webUrl  = url;
+    state.messages = [];
+    updateStatusBadges();
+    showInfo(`✅ 已讀取網頁（${text.length} 字）。現在可以針對頁面內容提問！`);
+    document.getElementById('urlInput').value = '';
+  } catch (e) {
+    showError(`❌ 網頁讀取失敗：${e.message}`);
+  }
+};
+
+// ─────────────────────────────────────────────
+// DuckDuckGo 搜尋（via DuckDuckGo HTML → Jina → AI）
+// 因瀏覽器 CORS 限制，改用 DuckDuckGo Instant Answer API + AI 整合
+// ─────────────────────────────────────────────
+window.doSearch = async () => {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  if (!getApiKey()) { showError('請先輸入 OpenRouter API Key'); return; }
+
+  document.getElementById('searchInput').value = '';
+  appendMessage('user', `🔍 搜尋：${query}`);
+  addTypingIndicator();
+
+  try {
+    // 使用 DuckDuckGo Instant Answer API（支援 CORS）
+    const ddgResp = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
+    );
+    const ddgData = await ddgResp.json();
+
+    // 整合 DDG 摘要 + 相關主題
+    let context = '';
+    if (ddgData.AbstractText) context += `摘要：${ddgData.AbstractText}\n`;
+    if (ddgData.AbstractURL)  context += `來源：${ddgData.AbstractURL}\n`;
+    if (ddgData.RelatedTopics?.length) {
+      context += '\n相關結果：\n';
+      ddgData.RelatedTopics.slice(0, 8).forEach((t, i) => {
+        if (t.Text) context += `[${i+1}] ${t.Text}\n${t.FirstURL ? '連結：' + t.FirstURL : ''}\n`;
+      });
+    }
+
+    if (!context.trim()) {
+      context = `（DuckDuckGo 對「${query}」沒有即時摘要，請直接根據你的知識回答）`;
+    }
+
+    const prompt = `請回答使用者的問題：「${query}」\n以下是 DuckDuckGo 搜尋結果供參考：\n${context}\n請整合以上資訊給出完整回答，並附上相關連結。`;
+
+    state.messages.push({ role: 'user', content: `🔍 搜尋：${query}` });
+    const reply = await callOpenRouter(prompt);
+    removeTypingIndicator();
+    if (reply) {
+      appendMessage('assistant', reply);
+      state.messages.push({ role: 'assistant', content: reply });
+    }
+  } catch (e) {
+    removeTypingIndicator();
+    showError(`❌ 搜尋失敗：${e.message}`);
+  }
+};
+
+// ─────────────────────────────────────────────
+// 台鐵時刻表（TDX API）
+// ─────────────────────────────────────────────
+async function getTDXToken(clientId, clientSecret) {
+  const now = Date.now() / 1000;
+  if (tdxToken && now < tdxTokenExpires - 60) return tdxToken;
+  const resp = await fetch(TDX_AUTH_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+  if (!resp.ok) throw new Error('TDX 認證失敗');
+  const data = await resp.json();
+  tdxToken = data.access_token;
+  tdxTokenExpires = now + (data.expires_in || 86400);
+  return tdxToken;
+}
+
+async function getTRAStations(token) {
+  const now = Date.now() / 1000;
+  if (traStations && now < traStationsExpires) return traStations;
+  const resp = await fetch(`${TDX_TRA_BASE}/Station?$format=JSON`, {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  if (!resp.ok) throw new Error('無法取得車站清單');
+  const raw = await resp.json();
+  traStations = Array.isArray(raw) ? raw : (raw.Stations || Object.values(raw).find(v => Array.isArray(v)) || []);
+  traStationsExpires = now + 86400;
+  return traStations;
+}
+
+function findStation(stations, name) {
+  const n = name.trim().replace(/台/g, '臺');
+  for (const s of stations) {
+    const sn = (s?.StationName?.Zh_tw || '').replace(/台/g, '臺');
+    if (sn === n) return [s.StationID, s.StationName.Zh_tw];
+  }
+  for (const s of stations) {
+    const sn = (s?.StationName?.Zh_tw || '').replace(/台/g, '臺');
+    if (sn.includes(n)) return [s.StationID, s.StationName.Zh_tw];
+  }
+  return null;
+}
+
+window.queryTrain = async () => {
+  const clientId  = document.getElementById('tdxId').value.trim();
+  const clientSecret = document.getElementById('tdxSecret').value.trim();
+  const fromName  = document.getElementById('trainFrom').value.trim();
+  const toName    = document.getElementById('trainTo').value.trim();
+  const dateVal   = document.getElementById('trainDate').value;
+
+  if (!clientId || !clientSecret) { showError('請輸入 TDX Client ID / Secret'); return; }
+  if (!fromName || !toName) { showError('請輸入出發站和到達站'); return; }
+  const dateStr = dateVal || new Date().toISOString().slice(0, 10);
+
+  showInfo('🚆 查詢台鐵時刻表中...');
+
+  try {
+    const token = await getTDXToken(clientId, clientSecret);
+    const stations = await getTRAStations(token);
+
+    const fromMatch = findStation(stations, fromName);
+    const toMatch   = findStation(stations, toName);
+    if (!fromMatch) { showError(`⚠️ 找不到出發站「${fromName}」`); return; }
+    if (!toMatch)   { showError(`⚠️ 找不到到達站「${toName}」`); return; }
+
+    const [fromId, fromOfficial] = fromMatch;
+    const [toId, toOfficial] = toMatch;
+
+    const resp = await fetch(
+      `${TDX_TRA_BASE}/DailyTrainTimetable/OD/${fromId}/to/${toId}/${dateStr}?$format=JSON`,
+      { headers: { authorization: `Bearer ${token}` } }
+    );
+    if (!resp.ok) throw new Error(`TDX ${resp.status}`);
+    const data = await resp.json();
+    const rows = Array.isArray(data) ? data
+      : (data.TrainTimetables || Object.values(data).find(v => Array.isArray(v)) || []);
+
+    if (!rows.length) {
+      showInfo(`😥 查不到 ${dateStr} 從「${fromOfficial}」到「${toOfficial}」的班次`);
+      return;
+    }
+
+    const lines = [`🚆 **${dateStr}｜${fromOfficial} → ${toOfficial}**\n`];
+    rows.slice(0, 10).forEach(row => {
+      const t = row.TrainInfo || {};
+      const type = TRAIN_TYPES[String(t.TrainTypeID)] || t.TrainTypeName?.Zh_tw || '';
+      const stops = row.StopTimes || [];
+      const dep = stops[0]?.DepartureTime || '?';
+      const arr = stops[stops.length-1]?.ArrivalTime || '?';
+      lines.push(`🚉 ${t.TrainNo}（${type}） ${dep} → ${arr}`);
+    });
+    if (rows.length > 10) lines.push(`\n（共 ${rows.length} 班，僅顯示前 10 筆）`);
+
+    appendMessage('assistant', lines.join('\n'));
+  } catch (e) {
+    showError(`❌ 查詢失敗：${e.message}`);
+  }
+};
+
+// ─────────────────────────────────────────────
+// 初始化日期
+// ─────────────────────────────────────────────
+document.getElementById('trainDate').value = new Date().toISOString().slice(0, 10);
+</script>
+</body>
+</html>
