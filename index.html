@@ -355,6 +355,14 @@ window.sendMessage = async () => {
     return;
   }
 
+  if (text.startsWith('/url ')) {
+    const url = text.slice(5).trim();
+    document.getElementById('urlInput').value = url;
+    appendMessage('user', text);
+    await window.loadURL();
+    return;
+  }
+
   if (text.startsWith('/web ')) {
     const url = text.slice(5).trim();
     document.getElementById('urlInput').value = url;
@@ -370,13 +378,34 @@ window.sendMessage = async () => {
     return;
   }
 
+  if (text.startsWith('/setrole ')) {
+    const newRole = text.slice(9).trim();
+    document.getElementById('systemPrompt').value = newRole;
+    state.messages = [];
+    document.getElementById('chat-messages').innerHTML = '';
+    appendMessage('user', text);
+    showInfo(`✅ 角色已設定：${newRole}<br>對話記憶已清除。`);
+    return;
+  }
+
+  if (text === '/clearpdf') {
+    appendMessage('user', text);
+    window.clearPDF();
+    showInfo('🗑️ PDF 內容已清除，對話記憶已重置。');
+    return;
+  }
+
   if (text === '/help') {
     appendMessage('assistant',
-      `**可用指令：**\n` +
-      `\`/train 出發站 到達站 [日期]\` — 查台鐵時刻表\n` +
-      `\`/web 網址\` — 讀取網頁內容\n` +
-      `\`/search 關鍵字\` — DuckDuckGo 搜尋\n` +
-      `\`/help\` — 顯示此說明`
+      `**可用指令：**\n\n` +
+      `| 指令 | 說明 | 範例 |\n` +
+      `|------|------|------|\n` +
+      `| \`/setrole 提示詞\` | 自訂 AI 角色，同步重置上下文 | \`/setrole 你是一個幽默的科技顧問\` |\n` +
+      `| \`/search 關鍵字\` | 強制啟動即時搜尋，整合 LLM 回答 | \`/search 台北明日天氣預報\` |\n` +
+      `| \`/url 網址\` | 解析外部網頁並暫存，可針對頁面提問 | \`/url https://example.com/news\` |\n` +
+      `| \`/train 出發 到達 [日期]\` | 查台鐵時刻表，未填日期預設今日 | \`/train 台北 台中 2026-07-20\` |\n` +
+      `| \`/clearpdf\` | 清除當前暫存的 PDF 內容與記憶 | \`/clearpdf\` |\n` +
+      `| \`/help\` | 顯示此說明 | \`/help\` |`
     );
     return;
   }
