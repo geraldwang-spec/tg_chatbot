@@ -326,6 +326,53 @@ async function callOpenRouter(userMessage) {
 }
 
 // ─────────────────────────────────────────────
+// 意圖偵測（自然語言 → 結構化指令）
+// ─────────────────────────────────────────────
+async function detectIntent(userText) {
+  const apiKey = getApiKey();
+  if (!apiKey) return { intent: 'chat' };
+
+  const today = new Date().toISOString().slice(0, 10);
+  // 計算明天日期
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  const prompt = `今天是 ${today}，明天是 ${tomorrow}。
+請判斷以下使用者訊息是否在詢問台鐵（台灣鐵路）時刻表。
+若是，請抽取：出發站（中文站名）、到達站（中文站名）、日期（YYYY-MM-DD，若提到「明天」用 ${tomorrow}，未指定日期用 ${today}）。
+只回傳純 JSON，不要 markdown，不要說明文字：
+- 若是台鐵查詢：{"intent":"train","from":"出發站","to":"到達站","date":"YYYY-MM-DD"}
+- 否則：{"intent":"chat"}
+
+使用者訊息：「${userText}」`;
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': location.href,
+        'X-Title': 'AI Chat Assistant',
+      },
+      body: JSON.stringify({
+        model: getModel(),
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 80,
+        temperature: 0,
+      }),
+    });
+    if (!resp.ok) return { intent: 'chat' };
+    const data = await resp.json();
+    const raw = (data.choices?.[0]?.message?.content || '').trim();
+    // 嘗試直接 parse，或從回應中擷取 JSON
+    try { return JSON.parse(raw); } catch {}
+    const m = raw.match(/\{[\s\S]*?\}/);
+    if (m) return JSON.parse(m[0]);
+  } catch {}
+  return { intent: 'chat' };
+}
+
+// ─────────────────────────────────────────────
 // 傳送訊息
 // ─────────────────────────────────────────────
 window.sendMessage = async () => {
@@ -410,8 +457,30 @@ window.sendMessage = async () => {
     return;
   }
 
+  // ── 自然語言意圖偵測（僅在填有 TDX 憑證時啟用）──
+  const tdxId = document.getElementById('tdxId').value.trim();
+  const tdxSecret = document.getElementById('tdxSecret').value.trim();
+  if (tdxId && tdxSecret && getApiKey()) {
+    appendMessage('user', text);
+    addTypingIndicator();
+    try {
+      const intent = await detectIntent(text);
+      if (intent.intent === 'train' && intent.from && intent.to) {
+        removeTypingIndicator();
+        document.getElementById('trainFrom').value = intent.from;
+        document.getElementById('trainTo').value   = intent.to;
+        if (intent.date) document.getElementById('trainDate').value = intent.date;
+        showInfo(`🤖 偵測到台鐵查詢：${intent.from} → ${intent.to}（${intent.date}）`);
+        await window.queryTrain();
+        return;
+      }
+      removeTypingIndicator();
+    } catch { removeTypingIndicator(); }
+  } else {
+    appendMessage('user', text);
+  }
+
   // ── 一般對話 ──
-  appendMessage('user', text);
   state.messages.push({ role: 'user', content: text });
   addTypingIndicator();
 
