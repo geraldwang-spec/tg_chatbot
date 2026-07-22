@@ -1,6 +1,4 @@
-================================================================================
-                      Multi-Functional Telegram AI Chatbot
-================================================================================
+Multi-Functional Telegram AI Chatbot
 
 [專案簡介]
 本專案為一個基於 Python 與 python-telegram-bot 開發的多功能 AI 聊天機器人[cite: 1]。
