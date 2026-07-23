@@ -2,7 +2,7 @@ Multi-Functional Telegram AI Chatbot
 
 [專案簡介]
 本專案為一個基於 Python 與 python-telegram-bot 開發的多功能 AI 聊天機器人[cite: 1]。
-整合 OpenRouter API、TDX 交通部 API、DuckDuckGo 搜尋與 PDF/OCR 辨識，提供一站式智慧對話與服務體驗[cite: 1]。
+整合 OpenRouter API、TDX 交通部 API、DuckDuckGo 搜尋與 PDF/OCR 辨識，提供一站式智慧對話與服務體驗。
 
 --------------------------------------------------------------------------------
 【核心特色】
@@ -17,16 +17,16 @@ Multi-Functional Telegram AI Chatbot
 【技術棧 (Tech Stack)】
 --------------------------------------------------------------------------------
 - 程式語言：Python 3.10+
-- 框架與異步處理：python-telegram-bot, asyncio, aiohttp[cite: 1]
-- AI 模型介面：OpenRouter API[cite: 1]
-- 文件解析與 OCR：pypdf, pytesseract (Tesseract OCR)[cite: 1]
-- 外部資料源：TDX 運輸資料流通服務平臺, DuckDuckGo[cite: 1]
+- 框架與異步處理：python-telegram-bot, asyncio, aiohttp
+- AI 模型介面：OpenRouter API
+- 文件解析與 OCR：pypdf, pytesseract (Tesseract OCR)
+- 外部資料源：TDX 運輸資料流通服務平臺, DuckDuckGo
 
 --------------------------------------------------------------------------------
 【快速開始 (Quick Start)】
 --------------------------------------------------------------------------------
 1. 下載專案：
-   git clone https://github.com/geraldwang-spec/tg_chatbot.git[cite: 1]
+   git clone https://github.com/geraldwang-spec/tg_chatbot.git
    cd tg_chatbot
 
 2. 安裝依賴套件：
@@ -44,27 +44,27 @@ Multi-Functional Telegram AI Chatbot
 --------------------------------------------------------------------------------
 【系統控制指令手冊 (Command Protocol)】
 --------------------------------------------------------------------------------
-/setrole [提示詞]                  自訂助理人格 (System Prompt)，並同步重置上下文[cite: 1]
-                                   範例：/setrole 你是一個幽默的科技顧問[cite: 1]
+/setrole [提示詞]                  自訂助理人格 (System Prompt)，並同步重置上下文
+                                   範例：/setrole 你是一個幽默的科技顧問
 
-/search [關鍵字]                   強制啟動即時網路搜尋，整合 LLM 進行綜合解答[cite: 1]
-                                   範例：/search 台北明日天氣預報[cite: 1]
+/search [關鍵字]                   強制啟動即時網路搜尋，整合 LLM 進行綜合解答
+                                   範例：/search 台北明日天氣預報
 
-/url [網址]                        解析外部網頁內容並暫存，可持續針對該內容提問[cite: 1]
-                                   範例：/url https://example.com/news[cite: 1]
+/url [網址]                        解析外部網頁內容並暫存，可持續針對該內容提問
+                                   範例：/url https://example.com/news
 
-/train [起站] [到達站] [日期]      查詢起訖站台鐵時刻表，未填日期時預設為當日[cite: 1]
-                                   範例：/train 台北 台中 2026-07-20[cite: 1]
+/train [起站] [到達站] [日期]      查詢起訖站台鐵時刻表，未填日期時預設為當日
+                                   範例：/train 台北 台中 2026-07-20
 
-/clearpdf                          清除當前會話暫存的 PDF 內容與上下文記憶[cite: 1]
+/clearpdf                          清除當前會話暫存的 PDF 內容與上下文記憶
 
 --------------------------------------------------------------------------------
 【未來展望 (Roadmap)】
 --------------------------------------------------------------------------------
-- 導入持久化儲存（SQLite/PostgreSQL），取代記憶體字典[cite: 1]。
-- 擴充 TDX 整合範圍：高鐵、市區公車與捷運[cite: 1]。
-- 加入使用者身分驗證與 API 調用頻率管控[cite: 1]。
-- 站名比對支援模糊校正與容錯機制[cite: 1]。
+- 導入持久化儲存（SQLite/PostgreSQL），取代記憶體字典。
+- 擴充 TDX 整合範圍：高鐵、市區公車與捷運。
+- 加入使用者身分驗證與 API 調用頻率管控。
+- 站名比對支援模糊校正與容錯機制。
 
 -------------------------------------------------------------------------------
 專案網址
